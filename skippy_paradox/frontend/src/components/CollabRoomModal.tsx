@@ -1,0 +1,230 @@
+/**
+ * CollabRoomModal — UI for creating or joining a collaborative room.
+ *
+ * Two tabs:
+ *   • Create Room: enter display name → generates a room ID → host mode
+ *   • Join Room: enter room ID + display name → sends join request
+ */
+
+import React, { useState, useEffect } from 'react';
+import { useTheme } from '../hooks/useTheme';
+import { useMountTransition } from '../hooks/useMountTransition';
+import { X, Users, Plus, LogIn, Copy, Check } from 'lucide-react';
+import BorderGlow from './BorderGlow';
+import DotField from './DotField';
+
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+  onCreateRoom: (displayName: string, roomId: string) => void;
+  onJoinRoom: (displayName: string, roomId: string) => void;
+  joinError?: string | null;
+  onClearJoinError?: () => void;
+}
+
+function generateRoomId(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let id = '';
+  for (let i = 0; i < 6; i++) {
+    id += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return id;
+}
+
+export const CollabRoomModal: React.FC<Props> = ({ isOpen, onClose, onCreateRoom, onJoinRoom, joinError, onClearJoinError }) => {
+  const { isDark } = useTheme();
+  const [tab, setTab] = useState<'create' | 'join'>('create');
+  const [displayName, setDisplayName] = useState(() => localStorage.getItem('codecollab_displayName') || '');
+  const [roomId, setRoomId] = useState('');
+  const [generatedId] = useState(generateRoomId);
+
+  useEffect(() => {
+    localStorage.setItem('codecollab_displayName', displayName);
+  }, [displayName]);
+  const [copied, setCopied] = useState(false);
+
+  const { hasRendered, isActive } = useMountTransition(isOpen, 300);
+
+  if (!hasRendered) return null;
+
+  const bg = isDark ? 'bg-[#1a1a2e]' : 'bg-white';
+  const border = isDark ? 'border-slate-700/50' : 'border-slate-200';
+  const textP = isDark ? 'text-white' : 'text-slate-900';
+  const textM = isDark ? 'text-slate-400' : 'text-slate-500';
+  const inputBg = isDark ? 'bg-[#232340]' : 'bg-slate-100';
+  const inputBorder = isDark ? 'border-slate-600' : 'border-slate-300';
+  const inputText = isDark ? 'text-white' : 'text-slate-900';
+
+  const handleCopyId = () => {
+    navigator.clipboard.writeText(generatedId);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCreate = () => {
+    if (!displayName.trim()) return;
+    onCreateRoom(displayName.trim(), generatedId);
+    onClose();
+  };
+
+  const handleJoin = () => {
+    if (!displayName.trim() || !roomId.trim()) return;
+    onClearJoinError?.();
+    onJoinRoom(displayName.trim(), roomId.trim().toUpperCase());
+    // Don't close — wait for approval or show error
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
+      {/* Backdrop */}
+      <div className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ease-out ${isActive ? 'opacity-100' : 'opacity-0'}`} />
+
+      {/* Modal */}
+      <BorderGlow
+        backgroundColor={isDark ? '#1a1a2e' : '#ffffff'}
+        colors={['#CAA4F7', '#9B6DD7', '#38bdf8']}
+        borderRadius={16}
+        glowRadius={50}
+        glowIntensity={1.2}
+        glowColor="280 60 85"
+        animated={isActive}
+        fillOpacity={0.3}
+        className={`w-full max-w-md mx-4 transition-all duration-300 ease-out transform ${isActive ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-4 scale-95 opacity-0'}`}
+      >
+        <div
+          className={`${bg} rounded-2xl overflow-hidden relative`}
+          onClick={e => e.stopPropagation()}
+        >
+        {/* DotField Background */}
+        <div className="absolute inset-0 z-0 opacity-35 pointer-events-none">
+          <DotField
+            dotRadius={1.5}
+            dotSpacing={16}
+            bulgeStrength={70}
+            glowRadius={160}
+            sparkle={true}
+            waveAmplitude={0}
+            gradientFrom={isDark ? 'rgba(202, 164, 247, 0.30)' : 'rgba(136, 57, 239, 0.25)'}
+            gradientTo={isDark ? 'rgba(139, 92, 246, 0.18)' : 'rgba(168, 85, 247, 0.18)'}
+            glowColor={isDark ? '#1a1a2e' : '#ffffff'}
+          />
+        </div>
+        {/* Header */}
+        <div className={`flex items-center justify-between px-6 py-4 border-b ${border} relative z-10`}>
+          <div className="flex items-center gap-2">
+            <Users size={20} className="text-[#CAA4F7]" />
+            <h2 className={`text-lg font-bold ${textP}`}>Live Collaboration</h2>
+          </div>
+          <button onClick={onClose} className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-700' : 'hover:bg-slate-100'}`}>
+            <X size={18} className={textM} />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className={`flex border-b ${border} relative z-10`}>
+          {(['create', 'join'] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`flex-1 py-3 text-sm font-bold transition-all relative ${
+                tab === t
+                  ? `${textP} after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#CAA4F7]`
+                  : `${textM} hover:${textP}`
+              }`}
+            >
+              {t === 'create' ? (
+                <span className="flex items-center justify-center gap-1.5"><Plus size={14} /> Host Room</span>
+              ) : (
+                <span className="flex items-center justify-center gap-1.5"><LogIn size={14} /> Join Room</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-4 relative z-10">
+          {/* Display Name (shared by both tabs) */}
+          <div>
+            <label className={`block text-xs font-bold mb-1.5 ${textM}`}>DISPLAY NAME</label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={e => setDisplayName(e.target.value)}
+              placeholder="e.g. John"
+              maxLength={30}
+              className={`w-full px-3 py-2.5 rounded-lg border ${inputBg} ${inputBorder} ${inputText} text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#CAA4F7]/50 focus:border-[#CAA4F7] transition-all`}
+            />
+          </div>
+
+          <div className="grid grid-cols-1">
+            {/* Create Room Tab */}
+            <div
+              className={`col-start-1 row-start-1 flex flex-col space-y-4 transition-all duration-300 ${
+                tab === 'create' ? 'opacity-100 z-10' : 'opacity-0 -z-10 invisible'
+              }`}
+            >
+              {/* Generated Room ID */}
+              <div>
+                <label className={`block text-xs font-bold mb-1.5 ${textM}`}>ROOM ID</label>
+                <div className="flex gap-2">
+                  <div className={`flex-1 flex items-center px-4 py-2.5 rounded-lg border ${inputBg} ${inputBorder} font-mono text-lg tracking-[0.3em] ${textP} font-bold select-all`}>
+                    {generatedId}
+                  </div>
+                  <button
+                    onClick={handleCopyId}
+                    className="flex items-center justify-center px-3 rounded-lg bg-[#CAA4F7]/20 hover:bg-[#CAA4F7]/30 text-[#CAA4F7] border border-[#CAA4F7]/30 transition-all active:scale-95"
+                    title="Copy Room ID"
+                  >
+                    {copied ? <Check size={16} /> : <Copy size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                onClick={handleCreate}
+                disabled={!displayName.trim()}
+                className="w-full py-3 rounded-lg bg-[#CAA4F7] hover:bg-[#D4B5F9] text-[#1E1E2A] font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none shadow-md mt-auto"
+              >
+                Create & Host Room
+              </button>
+            </div>
+
+            {/* Join Room Tab */}
+            <div
+              className={`col-start-1 row-start-1 flex flex-col space-y-4 transition-all duration-300 ${
+                tab === 'join' ? 'opacity-100 z-10' : 'opacity-0 -z-10 invisible'
+              }`}
+            >
+              {/* Room ID input */}
+              <div>
+                <label className={`block text-xs font-bold mb-1.5 ${textM}`}>ROOM ID</label>
+                <input
+                  type="text"
+                  value={roomId}
+                  onChange={e => { setRoomId(e.target.value.toUpperCase()); onClearJoinError?.(); }}
+                  placeholder="e.g. A3K7M2"
+                  maxLength={10}
+                  className={`w-full px-4 py-2.5 rounded-lg border ${inputBg} ${
+                    joinError ? 'border-red-400 ring-2 ring-red-400/30' : inputBorder
+                  } font-mono text-lg tracking-[0.3em] font-bold ${textP} placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#CAA4F7]/50 focus:border-[#CAA4F7] transition-all uppercase`}
+                />
+                {joinError && (
+                  <p className="text-xs mt-1.5 text-red-400 font-medium">{joinError}</p>
+                )}
+              </div>
+
+              <button
+                onClick={handleJoin}
+                disabled={!displayName.trim() || !roomId.trim()}
+                className="w-full py-3 rounded-lg bg-[#CAA4F7] hover:bg-[#D4B5F9] text-[#1E1E2A] font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none shadow-md mt-auto"
+              >
+                Request to Join
+              </button>
+            </div>
+          </div>
+        </div>
+        </div>
+      </BorderGlow>
+    </div>
+  );
+};
